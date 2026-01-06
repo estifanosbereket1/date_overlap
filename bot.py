@@ -4,10 +4,11 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
+from dotenv import load_dotenv
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = "8678218747:AAGIXLf-B9KfLA6pTvB8HZMO5LaHtjk7Yrs"
-API_URL = "http://127.0.0.1:8000"
+
 
 pending_consents = {}
 consent_pairs = {}
@@ -45,7 +46,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
         with open(img_path, "rb") as f:
             resp = requests.post(
-                f"{API_URL}/upload",
+                f"{os.getenv("API_URL")}/upload",
                 files={"file": ("photo.jpg", f, "image/jpeg")},
                 data={"handle": handle, "chat_id": user.id},
                 timeout=60
@@ -177,7 +178,7 @@ async def handle_consent(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     del consent_pairs[match_key]
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(handle_consent, pattern="^consent_"))

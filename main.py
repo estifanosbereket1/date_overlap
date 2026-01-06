@@ -6,13 +6,17 @@ import psycopg2
 import numpy as np
 import tempfile
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 app = FastAPI()
 
 DB = psycopg2.connect(
-    dbname="faceapp",
-    user="postgres",
-    password="postgres",
-    host="127.0.0.1"
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST")
 )
 
 THRESHOLD = 0.68
