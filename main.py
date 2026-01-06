@@ -31,7 +31,7 @@ def cosine_distance(a, b):
     return 1 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), handle: str = Form(...)):
+async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
     # Save the uploaded image to a temp file
     suffix = os.path.splitext(file.filename)[1]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -47,35 +47,25 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...)):
 
     # Search the database for similar embeddings
     cur = DB.cursor()
-    cur.execute("SELECT id, telegram_handle, embedding FROM submissions")
+    cur.execute("SELECT id, telegram_handle, chat_id, embedding FROM submissions")
     rows = cur.fetchall()
 
     matches = []
     for row in rows:
-        db_id, db_handle, db_embedding = row
-    # Convert string back to list of floats
-    db_embedding = [float(x) for x in str(db_embedding).strip("[]").split(",")]
-    dist = cosine_distance(embedding, db_embedding)
-    if dist < THRESHOLD:
-        matches.append({
-            "id": db_id,
-            "handle": db_handle,
-            "distance": round(dist, 4)
-        })
-    # for row in rows:
-    #     db_id, db_handle, db_embedding = row
-    #     dist = cosine_distance(embedding, db_embedding)
-    #     if dist < THRESHOLD:
-    #         matches.append({
-    #             "id": db_id,
-    #             "handle": db_handle,
-    #             "distance": round(dist, 4)
-    #         })
-
-    # Store the new submission
+        db_id, db_handle, db_chat_id, db_embedding = row
+        db_embedding = [float(x) for x in str(db_embedding).strip("[]").split(",")]
+        dist = cosine_distance(embedding, db_embedding)
+        if dist < THRESHOLD:
+            matches.append({
+                "id": db_id,
+                "handle": db_handle,
+                "chat_id": db_chat_id,
+                "distance": round(dist, 4)
+            })
+   
     cur.execute(
-        "INSERT INTO submissions (telegram_handle, embedding) VALUES (%s, %s::vector)",
-        (handle, str(embedding))
+    "INSERT INTO submissions (telegram_handle, chat_id, embedding) VALUES (%s, %s, %s::vector)",
+    (handle, chat_id, str(embedding))
     )
     DB.commit()
     os.unlink(tmp_path)
