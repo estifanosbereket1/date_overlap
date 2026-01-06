@@ -10,6 +10,7 @@ env/
 bin/
 lib/
 include/
+.env
 
 # Test/Sample Images
 # This ignores all .jpg files inside a folder named 'tests'
