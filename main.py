@@ -5,7 +5,6 @@ from fastapi import FastAPI, UploadFile, File, Form
 import psycopg2
 import numpy as np
 import tempfile
-
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,9 +19,10 @@ DB = psycopg2.connect(
 )
 
 THRESHOLD = 0.68
+RATE_LIMIT = 5  # max uploads per hour per user
 
 def get_embedding(img_path):
-    from deepface import DeepFace  # import here, not at top
+    from deepface import DeepFace
     result = DeepFace.represent(
         img_path=img_path,
         model_name="ArcFace",
@@ -34,29 +34,67 @@ def cosine_distance(a, b):
     a, b = np.array(a), np.array(b)
     return 1 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+def is_rate_limited(cur, chat_id):
+    # Count uploads by this user in the last hour
+    cur.execute("""
+        SELECT COUNT(*) FROM upload_log
+        WHERE chat_id = %s
+        AND uploaded_at > now() - interval '1 hour'
+    """, (chat_id,))
+    count = cur.fetchone()[0]
+    return count >= RATE_LIMIT
+
+def is_duplicate(cur, chat_id, embedding):
+    # Check if this user already submitted this same face
+    cur.execute("""
+        SELECT embedding FROM submissions
+        WHERE chat_id = %s
+    """, (chat_id,))
+    rows = cur.fetchall()
+    for row in rows:
+        existing = [float(x) for x in str(row[0]).strip("[]").split(",")]
+        dist = cosine_distance(embedding, existing)
+        if dist < THRESHOLD:
+            return True
+    return False
+
 @app.post("/upload")
 async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
-    # Save the uploaded image to a temp file
-    suffix = os.path.splitext(file.filename)[1]
+    cur = DB.cursor()
+
+    # --- Rate limiting ---
+    if is_rate_limited(cur, chat_id):
+        return {"error": "rate_limited", "detail": "You can only upload 5 photos per hour."}
+
+    # Save uploaded image to temp file
+    suffix = os.path.splitext(file.filename)[1] or ".jpg"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    # Extract embedding from the uploaded face
+    # Extract embedding
     try:
         embedding = get_embedding(tmp_path)
     except Exception as e:
         os.unlink(tmp_path)
         return {"error": "no_face_detected", "detail": str(e)}
+    finally:
+        os.unlink(tmp_path) if os.path.exists(tmp_path) else None
 
-    # Search the database for similar embeddings
-    cur = DB.cursor()
+    # --- Duplicate submission guard ---
+    if is_duplicate(cur, chat_id, embedding):
+        return {"error": "duplicate", "detail": "You already submitted this person."}
+
+    # --- Find matches ---
     cur.execute("SELECT id, telegram_handle, chat_id, embedding FROM submissions")
     rows = cur.fetchall()
 
     matches = []
     for row in rows:
         db_id, db_handle, db_chat_id, db_embedding = row
+        # Skip self-matches just in case
+        if db_chat_id == chat_id:
+            continue
         db_embedding = [float(x) for x in str(db_embedding).strip("[]").split(",")]
         dist = cosine_distance(embedding, db_embedding)
         if dist < THRESHOLD:
@@ -66,13 +104,17 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
                 "chat_id": db_chat_id,
                 "distance": round(dist, 4)
             })
-   
+
+    # --- Store submission and log the upload ---
     cur.execute(
-    "INSERT INTO submissions (telegram_handle, chat_id, embedding) VALUES (%s, %s, %s::vector)",
-    (handle, chat_id, str(embedding))
+        "INSERT INTO submissions (telegram_handle, chat_id, embedding) VALUES (%s, %s, %s::vector)",
+        (handle, chat_id, str(embedding))
+    )
+    cur.execute(
+        "INSERT INTO upload_log (chat_id) VALUES (%s)",
+        (chat_id,)
     )
     DB.commit()
-    os.unlink(tmp_path)
 
     return {
         "your_handle": handle,

@@ -59,12 +59,23 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         os.unlink(img_path)
 
     if "error" in result:
-        await status_msg.edit_text(
-            "I couldn't detect a face in that photo.\n"
-            "Please send a clear front-facing photo."
-        )
-        return
-
+            error = result["error"]
+            if error == "rate_limited":
+                await status_msg.edit_text(
+                    "⚠️ You've uploaded too many photos this hour.\n"
+                    "Please wait a bit before trying again."
+                )
+            elif error == "duplicate":
+                await status_msg.edit_text(
+                    "You already submitted this person before.\n"
+                    "We'll notify you if someone else submits the same face."
+                )
+            else:
+                await status_msg.edit_text(
+                    "I couldn't detect a face in that photo.\n"
+                    "Please send a clear front-facing photo."
+                )
+            return
     matches = result.get("matches", [])
 
     if not matches:
