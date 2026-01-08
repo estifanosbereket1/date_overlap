@@ -240,11 +240,81 @@ async def handle_consent(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     delete_consent_request(match_key)
 
+async def my_submissions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cur = DB.cursor()
+    cur.execute("""
+        SELECT id, uploaded_at, photo FROM submissions
+        WHERE chat_id = %s
+        ORDER BY uploaded_at DESC
+    """, (user.id,))
+    rows = cur.fetchall()
+
+    if not rows:
+        await update.message.reply_text(
+            "You haven't submitted anyone yet.\n"
+            "Send me a photo to get started!"
+        )
+        return
+
+    await update.message.reply_text(
+        f"You have {len(rows)} submission(s). "
+        f"Tap 🗑️ Delete under any photo to remove it."
+    )
+
+    for row in rows:
+        sub_id, uploaded_at, photo_bytes = row
+        date_str = uploaded_at.strftime("%b %d, %Y")
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "🗑️ Delete this submission",
+                callback_data=f"delete_{sub_id}"
+            )
+        ]])
+        # Send the thumbnail photo with a delete button
+        await update.message.reply_photo(
+            photo=io.BytesIO(bytes(photo_bytes)),
+            caption=f"Submitted on {date_str}",
+            reply_markup=keyboard
+        )
+
+async def handle_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    sub_id = int(query.data.split("_")[1])
+
+    cur = DB.cursor()
+
+    # Make sure this submission belongs to this user
+    cur.execute("""
+        SELECT id FROM submissions
+        WHERE id = %s AND chat_id = %s
+    """, (sub_id, user.id))
+    row = cur.fetchone()
+
+    if not row:
+        await query.edit_message_caption(
+            caption="❌ Submission not found or already deleted."
+        )
+        return
+
+    # Delete it
+    cur.execute("DELETE FROM submissions WHERE id = %s", (sub_id,))
+    DB.commit()
+
+    await query.edit_message_caption(
+        caption="✅ Submission deleted successfully."
+    )
+
 def main():
     app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(handle_consent, pattern="^consent_"))
+    app.add_handler(CommandHandler("mysubmissions", my_submissions))
+    app.add_handler(CallbackQueryHandler(handle_delete, pattern="^delete_"))
     print("Bot is running...")
     app.run_polling()
 
