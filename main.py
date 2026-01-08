@@ -34,6 +34,15 @@ def cosine_distance(a, b):
     a, b = np.array(a), np.array(b)
     return 1 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+def make_thumbnail(img_path):
+    from PIL import Image
+    import io
+    img = Image.open(img_path)
+    img.thumbnail((200, 200))  # resize to max 200x200 pixels
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()  # returns raw bytes
+
 def is_rate_limited(cur, chat_id):
     # Count uploads by this user in the last hour
     cur.execute("""
@@ -106,9 +115,11 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
             })
 
     # --- Store submission and log the upload ---
+
+    thumbnail = make_thumbnail(tmp_path)
     cur.execute(
         "INSERT INTO submissions (telegram_handle, chat_id, embedding) VALUES (%s, %s, %s::vector)",
-        (handle, chat_id, str(embedding))
+        (handle, chat_id, str(embedding), psycopg2.Binary(thumbnail))
     )
     cur.execute(
         "INSERT INTO upload_log (chat_id) VALUES (%s)",
