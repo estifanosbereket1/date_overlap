@@ -76,19 +76,21 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
         return {"error": "rate_limited", "detail": "You can only upload 5 photos per hour."}
 
     # Save uploaded image to temp file
+# Save uploaded image to temp file
     suffix = os.path.splitext(file.filename)[1] or ".jpg"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    # Extract embedding
+    # Extract embedding AND thumbnail before deleting the file
     try:
         embedding = get_embedding(tmp_path)
+        thumbnail = make_thumbnail(tmp_path)  # make thumbnail while file still exists
     except Exception as e:
-        os.unlink(tmp_path)
         return {"error": "no_face_detected", "detail": str(e)}
     finally:
-        os.unlink(tmp_path) if os.path.exists(tmp_path) else None
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)  # delete AFTER both operations are done
 
     # --- Duplicate submission guard ---
     if is_duplicate(cur, chat_id, embedding):
@@ -101,7 +103,6 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
     matches = []
     for row in rows:
         db_id, db_handle, db_chat_id, db_embedding = row
-        # Skip self-matches just in case
         if db_chat_id == chat_id:
             continue
         db_embedding = [float(x) for x in str(db_embedding).strip("[]").split(",")]
@@ -115,10 +116,8 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
             })
 
     # --- Store submission and log the upload ---
-
-    thumbnail = make_thumbnail(tmp_path)
     cur.execute(
-        "INSERT INTO submissions (telegram_handle, chat_id, embedding) VALUES (%s, %s, %s::vector)",
+        "INSERT INTO submissions (telegram_handle, chat_id, embedding, photo) VALUES (%s, %s, %s::vector, %s)",
         (handle, chat_id, str(embedding), psycopg2.Binary(thumbnail))
     )
     cur.execute(

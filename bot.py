@@ -92,8 +92,11 @@ def delete_consent_request(match_key):
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hi! Send me a clear photo of the guy's face.\n"
-        "I'll check if any other woman has submitted the same person."
+        "👋 Hi! Welcome to DateOverlap.\n\n"
+        "Here's what you can do:\n\n"
+        "📸 Send a photo — check if other women know the same guy\n"
+        "📋 /mysubmissions — view and delete your submitted photos\n\n"
+        "All matches are private. Usernames are only shared if both women agree. 🔒"
     )
 
 async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
