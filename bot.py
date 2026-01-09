@@ -30,6 +30,29 @@ def consent_buttons():
     ]]
     return InlineKeyboardMarkup(keyboard)
 
+def red_flag_score(match_count):
+    flags = "🚩" * min(match_count, 5)
+    if match_count == 1:
+        roast = "Busy boy."
+    elif match_count == 2:
+        roast = "This man is running a side hustle."
+    elif match_count == 3:
+        roast = "He's basically a local celebrity."
+    elif match_count == 4:
+        roast = "This man is running a franchise 🏢"
+    else:
+        roast = "Sir this is a Wendy's 😭"
+    return f"{flags} Red Flag Score: {match_count}\n{roast}"
+
+async def dramatic_reveal(status_msg):
+    import asyncio
+    await status_msg.edit_text("Checking... 🔍")
+    await asyncio.sleep(1)
+    await status_msg.edit_text("Hmm... 👀")
+    await asyncio.sleep(1)
+    await status_msg.edit_text("Oh. OH. 😳")
+    await asyncio.sleep(1)
+
 # --- DB helpers ---
 
 def save_consent_request(match_key, user_a_id, user_a_handle, user_b_id, user_b_handle):
@@ -150,13 +173,18 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     matches = result.get("matches", [])
 
     if not matches:
-        await status_msg.edit_text(
-            "No matches found yet. You're the first to submit this person.\n"
-            "I'll notify you if someone else submits the same face."
-        )
-        return
+            await status_msg.edit_text(
+                "No matches found yet. You're the first to submit this person.\n"
+                "I'll notify you if someone else submits the same face."
+            )
+            return
 
-    # Handle multiple matches
+    # Dramatic reveal
+    await dramatic_reveal(status_msg)
+
+    match_count = len(matches)
+    score_text = red_flag_score(match_count)
+
     for match in matches:
         if not match.get("chat_id"):
             continue
@@ -165,23 +193,26 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         matched_handle = match["handle"]
         match_key = make_match_key(user.id, matched_chat_id)
 
-        # Save consent request to DB instead of memory
         save_consent_request(match_key, user.id, handle, matched_chat_id, matched_handle)
 
-        # Ask current user
+        # Ask current user with red flag score
         await status_msg.edit_text(
-            "Match found! Another woman has submitted the same guy.\n\n"
-            "Do you want to share your username with her so you can connect?",
+            f"🚨 MATCH FOUND 🚨\n\n"
+            f"{score_text}\n\n"
+            f"Another woman has submitted the same guy.\n"
+            f"Do you want to share your username with her so you can connect?",
             reply_markup=consent_buttons()
         )
 
-        # Notify matched user
+        # Notify matched user with score too
         try:
             await ctx.bot.send_message(
                 chat_id=matched_chat_id,
                 text=(
-                    "Someone else just submitted the same guy you did!\n\n"
-                    "Do you want to share your username with her so you can connect?"
+                    f"🚨 MATCH FOUND 🚨\n\n"
+                    f"{score_text}\n\n"
+                    f"Someone else just submitted the same guy you did!\n"
+                    f"Do you want to share your username with her so you can connect?"
                 ),
                 reply_markup=consent_buttons()
             )
@@ -225,20 +256,20 @@ async def handle_consent(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if both_consented:
         await ctx.bot.send_message(
             chat_id=user_a_chat_id,
-            text=f"✅ You both agreed to connect!\n\nShe is: {user_b_handle}"
+            text=f"✅ You both agreed to connect!\n\nShe is: {user_b_handle}\n\nYou two should start a support group. 💅"
         )
         await ctx.bot.send_message(
             chat_id=user_b_chat_id,
-            text=f"✅ You both agreed to connect!\n\nShe is: {user_a_handle}"
+            text=f"✅ You both agreed to connect!\n\nShe is: {user_a_handle}\n\nYou two should start a support group. 💅"
         )
     else:
         await ctx.bot.send_message(
             chat_id=user_a_chat_id,
-            text="The other woman preferred to stay anonymous.\nNo information was shared."
+            text="She said no. Respect. Some things are better kept private. 🤫\nNo information was shared."
         )
         await ctx.bot.send_message(
             chat_id=user_b_chat_id,
-            text="The other woman preferred to stay anonymous.\nNo information was shared."
+            text="She said no. Respect. Some things are better kept private. 🤫\nNo information was shared."
         )
 
     delete_consent_request(match_key)
@@ -308,7 +339,7 @@ async def handle_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     DB.commit()
 
     await query.edit_message_caption(
-        caption="✅ Submission deleted successfully."
+        caption="✅ Submission deleted. Good riddance. You deserve better. 👏"
     )
 
 def main():
