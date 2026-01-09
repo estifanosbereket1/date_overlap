@@ -12,6 +12,11 @@ lib/
 include/
 .env
 
+.env
+venv/
+__pycache__/
+*.pyc
+
 # Test/Sample Images
 # This ignores all .jpg files inside a folder named 'tests'
 tests/*.jpg
