@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env/
+bin/
+lib/
+include/
+
+# Test/Sample Images
+# This ignores all .jpg files inside a folder named 'tests'
+tests/*.jpg
+# If you want to ignore all .jpg files in the entire project:
+# *.jpg
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Operating System files
+.DS_Store
+Thumbs.db
