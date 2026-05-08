@@ -15,7 +15,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app files
-COPY main.py bot.py cleardb.py .env ./
+# COPY main.py bot.py cleardb.py .env ./
+COPY main.py bot.py cleardb.py ./
 
 # Default command (overridden per service in docker-compose)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
