@@ -30,7 +30,7 @@ DB = psycopg2.connect(
     password=url.password,
     host=url.hostname,
     port=url.port,
-    sslmode="require"
+    sslmode="disable" 
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
