@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import urllib.parse
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from deepface import DeepFace
 
 
 
@@ -63,7 +64,7 @@ async def webhook(request: Request):
     return {"ok": True}
 
 def get_embedding(img_path):
-    from deepface import DeepFace
+    
     result = DeepFace.represent(
         img_path=img_path,
         model_name="ArcFace",
