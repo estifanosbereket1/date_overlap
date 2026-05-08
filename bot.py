@@ -5,20 +5,35 @@ import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
+import urllib.parse
 
 from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
+
 API_URL = os.getenv("API_URL")
 
+# DB is shared from main.py to avoid two connections
+from main import DB
+
 # --- Database connection ---
-DB = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST")
-)
+# DB = psycopg2.connect(
+#     dbname=os.getenv("DB_NAME"),
+#     user=os.getenv("DB_USER"),
+#     password=os.getenv("DB_PASSWORD"),
+#     host=os.getenv("DB_HOST")
+# )
+
+# url = urllib.parse.urlparse(os.getenv("DATABASE_URL"))
+# DB = psycopg2.connect(
+#     dbname=url.path[1:],
+#     user=url.username,
+#     password=url.password,
+#     host=url.hostname,
+#     port=url.port,
+#     sslmode="require"
+# )
 
 def make_match_key(id_a, id_b):
     return f"match_{min(id_a, id_b)}_{max(id_a, id_b)}"

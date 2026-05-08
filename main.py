@@ -6,20 +6,61 @@ import psycopg2
 import numpy as np
 import tempfile
 from dotenv import load_dotenv
+import urllib.parse
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+
+
 
 load_dotenv()
 
 app = FastAPI()
 
+# DB = psycopg2.connect(
+#     dbname=os.getenv("DB_NAME"),
+#     user=os.getenv("DB_USER"),
+#     password=os.getenv("DB_PASSWORD"),
+#     host=os.getenv("DB_HOST")
+# )
+
+url = urllib.parse.urlparse(os.getenv("DATABASE_URL"))
 DB = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST")
+    dbname=url.path[1:],
+    user=url.username,
+    password=url.password,
+    host=url.hostname,
+    port=url.port,
+    sslmode="require"
 )
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+telegram_app = Application.builder().token(BOT_TOKEN).build()
 
 THRESHOLD = 0.68
 RATE_LIMIT = 5  # max uploads per hour per user
+
+import bot as bot_handlers
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+telegram_app = Application.builder().token(BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", bot_handlers.start))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, bot_handlers.handle_photo))
+telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_consent, pattern="^consent_"))
+telegram_app.add_handler(CommandHandler("mysubmissions", bot_handlers.my_submissions))
+telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_delete, pattern="^delete_"))
+
+@app.on_event("startup")
+async def on_startup():
+    await telegram_app.initialize()
+    webhook_url = os.getenv("RENDER_EXTERNAL_URL")
+    await telegram_app.bot.set_webhook(f"{webhook_url}/webhook")
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, telegram_app.bot)
+    await telegram_app.process_update(update)
+    return {"ok": True}
 
 def get_embedding(img_path):
     from deepface import DeepFace
@@ -66,6 +107,10 @@ def is_duplicate(cur, chat_id, embedding):
         if dist < THRESHOLD:
             return True
     return False
+
+
+
+
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
