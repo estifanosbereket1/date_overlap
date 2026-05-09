@@ -17,23 +17,7 @@ API_URL = os.getenv("API_URL")
 # DB is shared from main.py to avoid two connections
 from main import DB
 
-# --- Database connection ---
-# DB = psycopg2.connect(
-#     dbname=os.getenv("DB_NAME"),
-#     user=os.getenv("DB_USER"),
-#     password=os.getenv("DB_PASSWORD"),
-#     host=os.getenv("DB_HOST")
-# )
 
-# url = urllib.parse.urlparse(os.getenv("DATABASE_URL"))
-# DB = psycopg2.connect(
-#     dbname=url.path[1:],
-#     user=url.username,
-#     password=url.password,
-#     host=url.hostname,
-#     port=url.port,
-#     sslmode="require"
-# )
 
 def make_match_key(id_a, id_b):
     return f"match_{min(id_a, id_b)}_{max(id_a, id_b)}"
@@ -159,6 +143,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             )
         result = resp.json()
     except Exception as e:
+        print(f"Error uploading photo: {e}")
         await status_msg.edit_text("Something went wrong. Please try again.")
         return
     finally:

@@ -21,12 +21,7 @@ face_app.prepare(ctx_id=0, det_size=(640, 640))
 
 
 
-# DB = psycopg2.connect(
-#     dbname=os.getenv("DB_NAME"),
-#     user=os.getenv("DB_USER"),
-#     password=os.getenv("DB_PASSWORD"),
-#     host=os.getenv("DB_HOST")
-# )
+
 
 url = urllib.parse.urlparse(os.getenv("DATABASE_URL"))
 DB = psycopg2.connect(
@@ -46,8 +41,6 @@ RATE_LIMIT = 5  # max uploads per hour per user
 
 import bot as bot_handlers
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-telegram_app = Application.builder().token(BOT_TOKEN).build()
 telegram_app.add_handler(CommandHandler("start", bot_handlers.start))
 telegram_app.add_handler(MessageHandler(filters.PHOTO, bot_handlers.handle_photo))
 telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_consent, pattern="^consent_"))
@@ -69,14 +62,7 @@ async def webhook(request: Request):
     await telegram_app.process_update(update)
     return {"ok": True}
 
-#def get_embedding(img_path):
-    
- #   result = DeepFace.represent(
-#      img_path=img_path,
- #       model_name="ArcFace",
- #       enforce_detection=True
- #   )
-  #  return result[0]["embedding"]
+
 
 def get_embedding(img_path):
     img = cv2.imread(img_path)
