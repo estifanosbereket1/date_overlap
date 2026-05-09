@@ -58,6 +58,7 @@ telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_delete, patter
 async def on_startup():
     await telegram_app.initialize()
     webhook_url = os.getenv("RENDER_EXTERNAL_URL").rstrip("/")
+    await telegram_app.bot.delete_webhook()  # clear old webhook first
     await telegram_app.bot.set_webhook(f"{webhook_url}/webhook")
     print(f"Webhook set to: {webhook_url}/webhook")
 
@@ -123,7 +124,9 @@ def is_duplicate(cur, chat_id, embedding):
             return True
     return False
 
-
+@app.get("/")
+async def health():
+    return {"status": "ok"}
 
 
 
