@@ -1,13 +1,14 @@
 import os
 import urllib.parse
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 import psycopg2
 import numpy as np
 import tempfile
 from dotenv import load_dotenv
 import cv2
-import insightface
 from insightface.app import FaceAnalysis
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 load_dotenv()
 
