@@ -6,17 +6,15 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
 import urllib.parse
-import asyncio
-import psycopg2
-from main import DB, get_embedding, make_thumbnail, is_rate_limited, is_duplicate, cosine_distance, THRESHOLD
 
 from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 
-API_URL = os.getenv("API_URL")
-# API_URL = os.getenv("API_URL", "http://localhost:8000")
+# API_URL = os.getenv("API_URL")
+
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # DB is shared from main.py to avoid two connections
 from main import DB
@@ -125,104 +123,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "All matches are private. Usernames are only shared if both women agree. 🔒"
     )
 
-# async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-#     user = update.effective_user
-#     handle = f"@{user.username}" if user.username else str(user.id)
-
-#     status_msg = await update.message.reply_text("Got it! Checking the database...")
-
-#     # Download photo
-#     photo = await update.message.photo[-1].get_file()
-#     img_path = f"/tmp/{user.id}.jpg"
-#     await photo.download_to_drive(img_path)
-
-#     # Send to backend
-#     try:
-#         with open(img_path, "rb") as f:
-#             resp = requests.post(
-#                 f"{API_URL}/upload",
-#                 files={"file": ("photo.jpg", f, "image/jpeg")},
-#                 data={"handle": handle, "chat_id": user.id},
-#                 timeout=60
-#             )
-#         result = resp.json()
-#     except Exception as e:
-#         print(f"Error uploading photo: {e}")
-#         await status_msg.edit_text("Something went wrong. Please try again.")
-#         return
-#     finally:
-#         if os.path.exists(img_path):
-#             os.unlink(img_path)
-
-#     # Error handling
-#     if "error" in result:
-#         error = result["error"]
-#         if error == "rate_limited":
-#             await status_msg.edit_text(
-#                 "⚠️ You've uploaded too many photos this hour.\n"
-#                 "Please wait a bit before trying again."
-#             )
-#         elif error == "duplicate":
-#             await status_msg.edit_text(
-#                 "You already submitted this person before.\n"
-#                 "We'll notify you if someone else submits the same face."
-#             )
-#         else:
-#             await status_msg.edit_text(
-#                 "I couldn't detect a face in that photo.\n"
-#                 "Please send a clear front-facing photo."
-#             )
-#         return
-
-#     matches = result.get("matches", [])
-
-#     if not matches:
-#             await status_msg.edit_text(
-#                 "No matches found yet. You're the first to submit this person.\n"
-#                 "I'll notify you if someone else submits the same face."
-#             )
-#             return
-
-#     # Dramatic reveal
-#     await dramatic_reveal(status_msg)
-
-#     match_count = len(matches)
-#     score_text = red_flag_score(match_count)
-
-#     for match in matches:
-#         if not match.get("chat_id"):
-#             continue
-
-#         matched_chat_id = match["chat_id"]
-#         matched_handle = match["handle"]
-#         match_key = make_match_key(user.id, matched_chat_id)
-
-#         save_consent_request(match_key, user.id, handle, matched_chat_id, matched_handle)
-
-#         # Ask current user with red flag score
-#         await status_msg.edit_text(
-#             f"🚨 MATCH FOUND 🚨\n\n"
-#             f"{score_text}\n\n"
-#             f"Another woman has submitted the same guy.\n"
-#             f"Do you want to share your username with her so you can connect?",
-#             reply_markup=consent_buttons()
-#         )
-
-#         # Notify matched user with score too
-#         try:
-#             await ctx.bot.send_message(
-#                 chat_id=matched_chat_id,
-#                 text=(
-#                     f"🚨 MATCH FOUND 🚨\n\n"
-#                     f"{score_text}\n\n"
-#                     f"Someone else just submitted the same guy you did!\n"
-#                     f"Do you want to share your username with her so you can connect?"
-#                 ),
-#                 reply_markup=consent_buttons()
-#             )
-#         except Exception as e:
-#             logging.warning(f"Could not notify {matched_handle}: {e}")
-
 async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     handle = f"@{user.username}" if user.username else str(user.id)
@@ -234,70 +134,54 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     img_path = f"/tmp/{user.id}.jpg"
     await photo.download_to_drive(img_path)
 
-    cur = DB.cursor()
-
-    # --- Rate limiting ---
-    if is_rate_limited(cur, user.id):
-        await status_msg.edit_text(
-            "⚠️ You've uploaded too many photos this hour.\n"
-            "Please wait a bit before trying again."
-        )
-        return
-
-    # --- Run CPU-heavy face detection in thread pool ---
-    loop = asyncio.get_event_loop()
+    # Send to backend
     try:
-        embedding = await loop.run_in_executor(None, get_embedding, img_path)
-        thumbnail = await loop.run_in_executor(None, make_thumbnail, img_path)
+        with open(img_path, "rb") as f:
+            resp = requests.post(
+                f"{API_URL}/upload",
+                files={"file": ("photo.jpg", f, "image/jpeg")},
+                data={"handle": handle, "chat_id": user.id},
+                timeout=60
+            )
+        result = resp.json()
     except Exception as e:
-        await status_msg.edit_text(
-            "I couldn't detect a face in that photo.\n"
-            "Please send a clear front-facing photo."
-        )
+        print(f"Error uploading photo: {e}")
+        await status_msg.edit_text("Something went wrong. Please try again.")
         return
     finally:
         if os.path.exists(img_path):
             os.unlink(img_path)
 
-    # --- Duplicate check ---
-    if is_duplicate(cur, user.id, embedding):
-        await status_msg.edit_text(
-            "You already submitted this person before.\n"
-            "We'll notify you if someone else submits the same face."
-        )
+    # Error handling
+    if "error" in result:
+        error = result["error"]
+        if error == "rate_limited":
+            await status_msg.edit_text(
+                "⚠️ You've uploaded too many photos this hour.\n"
+                "Please wait a bit before trying again."
+            )
+        elif error == "duplicate":
+            await status_msg.edit_text(
+                "You already submitted this person before.\n"
+                "We'll notify you if someone else submits the same face."
+            )
+        else:
+            await status_msg.edit_text(
+                "I couldn't detect a face in that photo.\n"
+                "Please send a clear front-facing photo."
+            )
         return
 
-    # --- Find matches ---
-    cur.execute("SELECT id, telegram_handle, chat_id, embedding FROM submissions")
-    rows = cur.fetchall()
+    matches = result.get("matches", [])
 
-    matches = []
-    for row in rows:
-        db_id, db_handle, db_chat_id, db_embedding = row
-        if db_chat_id == user.id:
-            continue
-        db_emb = [float(x) for x in str(db_embedding).strip("[]").split(",")]
-        dist = cosine_distance(embedding, db_emb)
-        if dist < THRESHOLD:
-            matches.append({"id": db_id, "handle": db_handle, "chat_id": db_chat_id, "distance": round(dist, 4)})
-
-    # --- Store submission ---
-    cur.execute(
-        "INSERT INTO submissions (telegram_handle, chat_id, embedding, photo) VALUES (%s, %s, %s::vector, %s)",
-        (handle, user.id, str(embedding), psycopg2.Binary(thumbnail))
-    )
-    cur.execute("INSERT INTO upload_log (chat_id) VALUES (%s)", (user.id,))
-    DB.commit()
-
-    # --- No matches ---
     if not matches:
-        await status_msg.edit_text(
-            "No matches found yet. You're the first to submit this person.\n"
-            "I'll notify you if someone else submits the same face."
-        )
-        return
+            await status_msg.edit_text(
+                "No matches found yet. You're the first to submit this person.\n"
+                "I'll notify you if someone else submits the same face."
+            )
+            return
 
-    # --- Dramatic reveal ---
+    # Dramatic reveal
     await dramatic_reveal(status_msg)
 
     match_count = len(matches)
@@ -322,7 +206,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             reply_markup=consent_buttons()
         )
 
-        # Notify matched user
+        # Notify matched user with score too
         try:
             await ctx.bot.send_message(
                 chat_id=matched_chat_id,
