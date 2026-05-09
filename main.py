@@ -57,8 +57,9 @@ telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_delete, patter
 @app.on_event("startup")
 async def on_startup():
     await telegram_app.initialize()
-    webhook_url = os.getenv("RENDER_EXTERNAL_URL")
+    webhook_url = os.getenv("RENDER_EXTERNAL_URL").rstrip("/")
     await telegram_app.bot.set_webhook(f"{webhook_url}/webhook")
+    print(f"Webhook set to: {webhook_url}/webhook")
 
 @app.post("/webhook")
 async def webhook(request: Request):
