@@ -15,7 +15,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 
-API_URL = os.getenv("API_URL")
+#API_URL = os.getenv("API_URL")
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # DB is shared from main.py to avoid two connections
 from main import DB
