@@ -1,15 +1,18 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
-from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi import FastAPI, UploadFile, File, Form
 import psycopg2
 import numpy as np
 import tempfile
 from dotenv import load_dotenv
-import urllib.parse
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from deepface import DeepFace
+import cv2
+import insightface
+from insightface.app import FaceAnalysis
+
+load_dotenv()
+
+# Load InsightFace model once at startup — not on every request
+face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+face_app.prepare(ctx_id=0, det_size=(640, 640))
 
 
 
@@ -63,15 +66,24 @@ async def webhook(request: Request):
     await telegram_app.process_update(update)
     return {"ok": True}
 
-def get_embedding(img_path):
+#def get_embedding(img_path):
     
-    result = DeepFace.represent(
-        img_path=img_path,
-        model_name="ArcFace",
-        enforce_detection=True
-    )
-    return result[0]["embedding"]
+ #   result = DeepFace.represent(
+#      img_path=img_path,
+ #       model_name="ArcFace",
+ #       enforce_detection=True
+ #   )
+  #  return result[0]["embedding"]
 
+def get_embedding(img_path):
+    img = cv2.imread(img_path)
+    faces = face_app.get(img)
+    if not faces:
+        raise ValueError("No face detected in the image")
+    # Return embedding of the largest detected face
+    largest = max(faces, key=lambda f: (f.bbox[2]-f.bbox[0]) * (f.bbox[3]-f.bbox[1]))
+    return largest.embedding.tolist()
+    
 def cosine_distance(a, b):
     a, b = np.array(a), np.array(b)
     return 1 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
