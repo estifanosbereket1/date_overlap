@@ -141,7 +141,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 f"{API_URL}/upload",
                 files={"file": ("photo.jpg", f, "image/jpeg")},
                 data={"handle": handle, "chat_id": user.id},
-                timeout=60
+                timeout=180
             )
         result = resp.json()
     except Exception as e:
