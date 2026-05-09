@@ -114,38 +114,30 @@ def is_duplicate(cur, chat_id, embedding):
 async def health():
     return {"status": "ok"}
 
-
-
-@app.post("/upload")
-async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
+# Add this function to main.py (replaces the /upload endpoint logic)
+async def process_upload(file_bytes: bytes, filename: str, handle: str, chat_id: int):
     cur = DB.cursor()
 
-    # --- Rate limiting ---
     if is_rate_limited(cur, chat_id):
         return {"error": "rate_limited", "detail": "You can only upload 5 photos per hour."}
 
-    # Save uploaded image to temp file
-# Save uploaded image to temp file
-    suffix = os.path.splitext(file.filename)[1] or ".jpg"
+    suffix = os.path.splitext(filename)[1] or ".jpg"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(await file.read())
+        tmp.write(file_bytes)
         tmp_path = tmp.name
 
-    # Extract embedding AND thumbnail before deleting the file
     try:
         embedding = get_embedding(tmp_path)
-        thumbnail = make_thumbnail(tmp_path)  # make thumbnail while file still exists
+        thumbnail = make_thumbnail(tmp_path)
     except Exception as e:
         return {"error": "no_face_detected", "detail": str(e)}
     finally:
         if os.path.exists(tmp_path):
-            os.unlink(tmp_path)  # delete AFTER both operations are done
+            os.unlink(tmp_path)
 
-    # --- Duplicate submission guard ---
     if is_duplicate(cur, chat_id, embedding):
         return {"error": "duplicate", "detail": "You already submitted this person."}
 
-    # --- Find matches ---
     cur.execute("SELECT id, telegram_handle, chat_id, embedding FROM submissions")
     rows = cur.fetchall()
 
@@ -164,15 +156,11 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
                 "distance": round(dist, 4)
             })
 
-    # --- Store submission and log the upload ---
     cur.execute(
         "INSERT INTO submissions (telegram_handle, chat_id, embedding, photo) VALUES (%s, %s, %s::vector, %s)",
         (handle, chat_id, str(embedding), psycopg2.Binary(thumbnail))
     )
-    cur.execute(
-        "INSERT INTO upload_log (chat_id) VALUES (%s)",
-        (chat_id,)
-    )
+    cur.execute("INSERT INTO upload_log (chat_id) VALUES (%s)", (chat_id,))
     DB.commit()
 
     return {
@@ -180,3 +168,75 @@ async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id:
         "matches_found": len(matches),
         "matches": matches
     }
+
+# Keep the HTTP endpoint too (calls the same function)
+@app.post("/upload")
+async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
+    file_bytes = await file.read()
+    return await process_upload(file_bytes, file.filename, handle, chat_id)
+
+
+# @app.post("/upload")
+# async def upload(file: UploadFile = File(...), handle: str = Form(...), chat_id: int = Form(...)):
+#     cur = DB.cursor()
+
+#     # --- Rate limiting ---
+#     if is_rate_limited(cur, chat_id):
+#         return {"error": "rate_limited", "detail": "You can only upload 5 photos per hour."}
+
+#     # Save uploaded image to temp file
+# # Save uploaded image to temp file
+#     suffix = os.path.splitext(file.filename)[1] or ".jpg"
+#     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+#         tmp.write(await file.read())
+#         tmp_path = tmp.name
+
+#     # Extract embedding AND thumbnail before deleting the file
+#     try:
+#         embedding = get_embedding(tmp_path)
+#         thumbnail = make_thumbnail(tmp_path)  # make thumbnail while file still exists
+#     except Exception as e:
+#         return {"error": "no_face_detected", "detail": str(e)}
+#     finally:
+#         if os.path.exists(tmp_path):
+#             os.unlink(tmp_path)  # delete AFTER both operations are done
+
+#     # --- Duplicate submission guard ---
+#     if is_duplicate(cur, chat_id, embedding):
+#         return {"error": "duplicate", "detail": "You already submitted this person."}
+
+#     # --- Find matches ---
+#     cur.execute("SELECT id, telegram_handle, chat_id, embedding FROM submissions")
+#     rows = cur.fetchall()
+
+#     matches = []
+#     for row in rows:
+#         db_id, db_handle, db_chat_id, db_embedding = row
+#         if db_chat_id == chat_id:
+#             continue
+#         db_embedding = [float(x) for x in str(db_embedding).strip("[]").split(",")]
+#         dist = cosine_distance(embedding, db_embedding)
+#         if dist < THRESHOLD:
+#             matches.append({
+#                 "id": db_id,
+#                 "handle": db_handle,
+#                 "chat_id": db_chat_id,
+#                 "distance": round(dist, 4)
+#             })
+
+#     # --- Store submission and log the upload ---
+#     cur.execute(
+#         "INSERT INTO submissions (telegram_handle, chat_id, embedding, photo) VALUES (%s, %s, %s::vector, %s)",
+#         (handle, chat_id, str(embedding), psycopg2.Binary(thumbnail))
+#     )
+#     cur.execute(
+#         "INSERT INTO upload_log (chat_id) VALUES (%s)",
+#         (chat_id,)
+#     )
+#     DB.commit()
+
+#     return {
+#         "your_handle": handle,
+#         "matches_found": len(matches),
+#         "matches": matches
+#     }

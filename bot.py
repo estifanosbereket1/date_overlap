@@ -6,6 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
 import urllib.parse
+from main import process_upload
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -123,29 +124,47 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "All matches are private. Usernames are only shared if both women agree. 🔒"
     )
 
+# async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+#     user = update.effective_user
+#     handle = f"@{user.username}" if user.username else str(user.id)
+
+#     status_msg = await update.message.reply_text("Got it! Checking the database...")
+
+#     # Download photo
+#     photo = await update.message.photo[-1].get_file()
+#     img_path = f"/tmp/{user.id}.jpg"
+#     await photo.download_to_drive(img_path)
+
+#     # Send to backend
+#     try:
+#         with open(img_path, "rb") as f:
+#             resp = requests.post(
+#                 f"{API_URL}/upload",
+#                 files={"file": ("photo.jpg", f, "image/jpeg")},
+#                 data={"handle": handle, "chat_id": user.id},
+#                 timeout=180
+#             )
+#         result = resp.json()
+#     except Exception as e:
+#         print(f"Error uploading photo: {e}")
+#         await status_msg.edit_text("Something went wrong. Please try again.")
+#         return
+
 async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     handle = f"@{user.username}" if user.username else str(user.id)
 
     status_msg = await update.message.reply_text("Got it! Checking the database...")
 
-    # Download photo
+    # Download photo into memory
     photo = await update.message.photo[-1].get_file()
-    img_path = f"/tmp/{user.id}.jpg"
-    await photo.download_to_drive(img_path)
+    img_bytes = await photo.download_as_bytearray()
 
-    # Send to backend
+    # Call directly — no HTTP, no timeout
     try:
-        with open(img_path, "rb") as f:
-            resp = requests.post(
-                f"{API_URL}/upload",
-                files={"file": ("photo.jpg", f, "image/jpeg")},
-                data={"handle": handle, "chat_id": user.id},
-                timeout=180
-            )
-        result = resp.json()
+        result = await process_upload(bytes(img_bytes), "photo.jpg", handle, user.id)
     except Exception as e:
-        print(f"Error uploading photo: {e}")
+        logging.error(f"Upload error: {e}")
         await status_msg.edit_text("Something went wrong. Please try again.")
         return
     finally:
