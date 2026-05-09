@@ -110,7 +110,7 @@ def is_duplicate(cur, chat_id, embedding):
             return True
     return False
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "POST", "HEAD"])
 async def health():
     return {"status": "ok"}
 
