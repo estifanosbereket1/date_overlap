@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 from fastapi import FastAPI, UploadFile, File, Form
 import psycopg2
 import numpy as np
@@ -14,9 +15,6 @@ load_dotenv()
 face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
 face_app.prepare(ctx_id=0, det_size=(640, 640))
 
-
-
-load_dotenv()
 
 app = FastAPI()
 
