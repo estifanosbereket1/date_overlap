@@ -12,12 +12,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 
 load_dotenv()
 
+app = FastAPI()
+
+
 # Load InsightFace model once at startup — not on every request
 face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
 face_app.prepare(ctx_id=0, det_size=(640, 640))
 
 
-app = FastAPI()
 
 # DB = psycopg2.connect(
 #     dbname=os.getenv("DB_NAME"),
